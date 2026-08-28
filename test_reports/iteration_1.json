@@ -1,0 +1,49 @@
+{
+  "summary": "Full e2e test of SAPA Sewa Gedung app. Backend: 34 pytest cases across settings, auth/JWT, bookings CRUD + status transitions, image upload/serve (Emergent objstore), admin account CRUD -> 33 passed, 1 xfail (no brute-force lockout). Frontend: verified landing (4 room cards), room detail modal with Shadcn date pickers, add-ons + qty pricing, add-to-cart toast + badge, cart slide-over checkout with QRIS (placeholder shown) -> booking created with Pending status and cart cleared; admin login via 'S' logo (invalid creds show correct error), /admin dashboard metrics + popular rooms + status breakdown + bookings table, status dropdown change persists after reload, CSV export downloads (bookings-sapa-2026-08-28.csv), Settings/CMS hero edit saved and reflected on public landing, Accounts tab lists owner admin with create form. All core flows work.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/login", "issue": "No brute-force protection / rate limiting or account lockout: 6+ consecutive wrong passwords all return 401 with no throttle (playbook expects lockout after 5 fails)"},
+      {"endpoint": "CORS middleware", "issue": "allow_credentials=True combined with CORS_ORIGINS=\"*\" is an invalid combination per spec (browsers reject credentialed wildcard). Harmless today because auth uses Bearer header, but should use explicit origins."},
+      {"endpoint": "/api/settings PUT", "issue": "Accepts an arbitrary dict ({data: {...}}) with no Pydantic schema for rooms/addons/prices — an admin typo or malicious payload can write arbitrary keys/shape into the settings doc and break the public page."},
+      {"endpoint": "/api/admins POST/PUT", "issue": "No password strength/min-length validation (1-char password accepted); no username format validation."},
+      {"endpoint": "/api/bookings POST", "issue": "No server-side validation that checkout > checkin, days>0, or that totals/prices match current settings — client-supplied totals are trusted (price tampering possible)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminSettings", "issue": "Reset uses native window.confirm() instead of Shadcn AlertDialog (inconsistent with rest of app, breaks automated flows). API reset itself works.", "selector": "[data-testid=\"settings-reset-btn\"]", "priority": "LOW"},
+      {"component": "RoomDetailModal (check-out picker)", "issue": "Check-out Calendar has no defaultMonth/month bound to the selected check-in, so when check-in is in a future month the popover opens on the current month with every day disabled — user must manually click the next-month arrow and may think it is broken.", "selector": "[data-testid=\"checkout-trigger\"]", "priority": "MEDIUM"},
+      {"component": "Dialog/Sheet (Radix)", "issue": "Console warning: 'Missing Description or aria-describedby for DialogContent' on room detail and login modals (a11y).", "selector": "[role=\"dialog\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin panel header", "issues": ["Sonner toasts render top-right directly over the Logout button; while a toast is visible Logout is visually obscured (click still lands after toast dismisses). Consider bottom-right toasts in admin."]},
+      {"screen": "Room detail modal", "issues": ["Modal content is taller than viewport at 1920x1080; the primary 'Tambah ke Keranjang' CTA is below the fold and requires scrolling inside the modal — consider a sticky footer CTA."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/backend/tests/cleanup_test_bookings.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Add defaultMonth={checkin} (and month state) to the check-out Calendar in RoomDetailModal so the popover opens on a month with selectable dates",
+    "Replace window.confirm in AdminSettings reset with Shadcn AlertDialog",
+    "Add login rate limiting / lockout after 5 failed attempts (playbook requirement)",
+    "Set CORS_ORIGINS to explicit origin(s) instead of '*' when allow_credentials=True",
+    "Server-side validate booking payload (checkout > checkin) and recompute totals from settings instead of trusting client",
+    "Add DialogDescription / aria-describedby to modals"
+  ],
+  "critical_code_review_comments": [
+    "POST /api/bookings trusts client-provided base_price/room_total/addons_total/total — recompute server-side from settings to prevent price tampering.",
+    "PUT /api/settings takes an unvalidated dict and $set's it directly; add a Pydantic Settings model (rooms/addons/hero) to avoid corrupting the single app_settings document.",
+    "GET /api/files/{path} passes the user-supplied path straight to object storage; it is only checked against db.files for content-type. Consider requiring the DB record to exist before fetching.",
+    "server.py uses deprecated @app.on_event startup/shutdown; migrate to lifespan handlers.",
+    "Storage calls (requests.put/get) are synchronous inside async endpoints and block the event loop during uploads/downloads — wrap in run_in_threadpool."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py", "/app/backend/tests/cleanup_test_bookings.py"],
+  "success_rate": {"backend": "97% (33/34 passed, 1 xfail: no brute-force lockout)", "frontend": "100% of tested flows functional (3 minor UI/UX defects)"},
+  "seed_data_creation": "Created and then deleted: TEST_Guest / TEST_DeleteMe bookings, admin 'test_staff1', one uploaded 1px PNG, and a UI booking 'TEST Guest UI'. Settings restored to defaults; one pre-existing booking ('Budi', status Confirmed after my status-dropdown test) remains.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin / admin123 (from /app/memory/test_credentials.md) — works; bcrypt hash verified to start with $2b$",
+  "context_for_next_testing_agent": "Backend suite at /app/backend/tests/backend_test.py covers all endpoints (run: cd /app/backend && python -m pytest tests/backend_test.py -q). Auth is Bearer-token/localStorage by design (no httpOnly cookie), so playbook cookie checks are N/A; brute-force lockout is genuinely missing (test_brute_force_lockout xfails - it will start passing once implemented). For Playwright date pickers use button[name=\"day\"]:not([disabled]) and remember the checkout calendar may need next-month navigation. AdminSettings reset triggers native window.confirm - register an async dialog handler (await d.accept()) or it hangs. Existing booking 'Budi' status was changed to Confirmed during dashboard testing.",
+  "rca_of_the_issue": "Checkout date picker 'no selectable days' RCA: Calendar in RoomDetailModal.jsx (line ~168) has disabled={(d) => !checkin || d <= checkin} but no defaultMonth, so react-day-picker shows today's month; if check-in falls in a later month all visible days are disabled. UI settings reset appearing to fail RCA: window.confirm at AdminSettings.jsx:110 was auto-dismissed by Playwright; the /api/settings/reset endpoint itself works (verified via pytest)."
+}

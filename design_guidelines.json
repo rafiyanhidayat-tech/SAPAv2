@@ -1,0 +1,142 @@
+{
+  "theme": {
+    "mode": "dark",
+    "archetype": "LUXURY",
+    "description": "Elegant luxury and corporate dark theme. Cinematic, moody, deeply textured, establishing a premium, high-end trust. The vibe is 'Old Money Tech' meeting modern booking efficiency."
+  },
+  "colors": {
+    "background": {
+      "base": "#0f172a",
+      "tailwind": "bg-slate-900",
+      "description": "Deep Slate-900. Never use pure black. This provides a structural, moody canvas."
+    },
+    "surface": {
+      "primary": "#1e293b",
+      "tailwind": "bg-slate-800",
+      "description": "Used for cards, modals, and the slide-over cart panel. It creates depth against the slate-900 base."
+    },
+    "surface_glass": {
+      "tailwind": "bg-slate-900/80 backdrop-blur-xl border-b border-white/10",
+      "description": "Used ONLY for the sticky header and top navigation. CRITICAL: Never use a fully transparent header over the hero image."
+    },
+    "accent": {
+      "base": "#f59e0b",
+      "tailwind": "text-amber-500 bg-amber-500",
+      "description": "Amber/Gold. Used for primary CTAs, the 'Sapa-Panti Sosial' brand name, active states, and luxurious accents. Use sparingly to maintain the premium feel."
+    },
+    "text": {
+      "primary": "#f8fafc",
+      "tailwind": "text-slate-50",
+      "description": "High contrast white/slate for headings."
+    },
+    "text_muted": {
+      "primary": "#94a3b8",
+      "tailwind": "text-slate-400",
+      "description": "For body text, table data, and secondary information."
+    }
+  },
+  "typography": {
+    "font_families": {
+      "brand_and_headings": {
+        "family": "Playfair Display",
+        "tailwind": "font-serif",
+        "weight_strategy": "font-bold to font-black for headings, font-medium for brand name.",
+        "brand_specific": "The Brand 'Sapa-Panti Sosial' must be exactly 32px (text-3xl) and use the Amber color (#f59e0b)."
+      },
+      "body_and_ui": {
+        "family": "DM Sans",
+        "tailwind": "font-sans",
+        "weight_strategy": "font-normal for body, font-medium for labels and table headers."
+      }
+    },
+    "hierarchy": {
+      "h1": "text-5xl sm:text-6xl font-serif tracking-tight",
+      "h2": "text-3xl sm:text-4xl font-serif tracking-tight",
+      "h3": "text-xl sm:text-2xl font-serif",
+      "body": "text-base font-sans leading-relaxed",
+      "labels": "text-xs font-sans uppercase tracking-[0.2em] text-slate-400"
+    },
+    "instruction": "Do NOT use Inter. Enforce the serif/sans pairing explicitly. Headings must have tight tracking."
+  },
+  "visual_enhancers": {
+    "borders": "1px solid border-slate-700 or border-white/10 for subtle separation on cards and modals.",
+    "shadows": "Deep ambient shadows: shadow-[0_8px_32px_rgba(0,0,0,0.5)]. Do not use light shadows in dark mode.",
+    "hover_states": "Interactive elements must transition cleanly. Buttons: hover:-translate-y-1 hover:shadow-lg transition-transform duration-300. Links: hover:text-amber-400 transition-colors.",
+    "overlays": "Hero image MUST have a bg-slate-900/60 overlay to ensure the Amber and White text pops.",
+    "textures": "Add subtle CSS noise or grain if possible to the main background to avoid 'digital flatness'."
+  },
+  "layouts_and_grids": {
+    "spacing": "Generous spacing. Use p-8, p-12, py-20 to let the luxury breathe. Cramped UI looks cheap.",
+    "hero": "Full height (min-h-[90vh]) or standard large hero (min-h-[70vh]). Center-aligned text for cinematic feel, with Amber Brand Name prominent.",
+    "room_catalogue": "The 'Bento' or structured grid. grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8. Images must have aspect-video or aspect-[4/5] object-cover.",
+    "admin_dashboard": "High-density grid for metrics. grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 for top metric cards. Tables must stretch full width overflow-x-auto."
+  },
+  "components": {
+    "buttons": "Pill-shaped (rounded-full) or crisp slight-radius (rounded-md). Primary: bg-amber-500 text-slate-900 hover:bg-amber-400. Secondary: border border-slate-600 text-slate-200 hover:bg-slate-800.",
+    "modals": "Room Detail Modal & Admin Login Modal must use Shadcn Dialog. Backdrop blur is mandatory (backdrop-blur-sm bg-black/80). Dialog content bg-slate-800.",
+    "slide_over_cart": "Use Shadcn Sheet component. Slide from right. bg-slate-900 border-l border-slate-800.",
+    "cards": "Room Cards: bg-slate-800 border-none overflow-hidden group. Image zooms on hover (group-hover:scale-105 transition-transform duration-700 ease-out).",
+    "inputs": "Shadcn Inputs. bg-slate-900 border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-slate-100.",
+    "toast": "Use Sonner for top-right notifications. Dark theme config.",
+    "table": "Shadcn Table for bookings. Hover effects on rows (hover:bg-slate-800/50). Status badges: Amber for Pending, Emerald for Confirmed."
+  },
+  "accessibility_and_testing": {
+    "data_testid": "CRITICAL: All interactive and key informational elements MUST include a data-testid attribute in kebab-case. Examples: data-testid='room-card-meeting', data-testid='checkout-submit-btn', data-testid='admin-login-input', data-testid='status-dropdown'.",
+    "contrast": "Ensure Amber text on Slate background meets at least AA standards. Use text-amber-500 on slate-900, text-amber-600 on lighter backgrounds if needed.",
+    "motion": "Respect prefers-reduced-motion. Animations must be purposeful, not distracting."
+  },
+  "image_urls": {
+    "hero_ballroom": {
+      "url": "https://images.pexels.com/photos/12689009/pexels-photo-12689009.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Elegant ballroom setup with crystal candelabras and luxurious decorations, perfect for a grand celebration.",
+      "category": "Hero Section Background / Main Brand Image"
+    },
+    "room_meeting": {
+      "url": "https://images.unsplash.com/photo-1740933084056-078fac872bff?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODF8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMjBjb3Jwb3JhdGUlMjBtZWV0aW5nJTIwcm9vbXxlbnwwfHx8fDE3ODc4OTU4MzZ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "A modern corporate meeting room with a large table and chairs.",
+      "category": "Room Catalogue Grid"
+    },
+    "room_vip": {
+      "url": "https://images.unsplash.com/photo-1756981168649-0e3c3c8a32f3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHxsdXh1cnklMjBWSVAlMjBsb3VuZ2UlMjByb29tfGVufDB8fHx8MTc4Nzg5NTgzNnww&ixlib=rb-4.1.0&q=85",
+      "description": "Luxurious dark room with green leather chesterfield sofa, matching the slate dark mode vibe perfectly.",
+      "category": "Room Catalogue Grid"
+    },
+    "room_outdoor": {
+      "url": "https://images.unsplash.com/photo-1780888207019-dd9121069a81?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHwxfHxvdXRkb29yJTIwd2VkZGluZyUyMHZlbnVlJTIwZXZlbmluZ3xlbnwwfHx8fDE3ODc4OTU4MzZ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Decorated wooden barn with glowing string lights at twilight.",
+      "category": "Room Catalogue Grid"
+    },
+    "qris_payment": {
+      "url": "https://images.pexels.com/photos/278430/pexels-photo-278430.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "High-resolution close-up of a smartphone displaying a QR code on its screen.",
+      "category": "Checkout Slide-over / QRIS Payment Modal"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Format all prices as Rupiah (e.g., 'Rp 5.000.000').",
+    "Use Shadcn UI components extensively but heavily customize them via Tailwind to match the Slate/Amber luxury theme.",
+    "Do NOT add a global transition: all to CSS. Apply transitions specifically to hover states via Tailwind.",
+    "Do NOT use HTML <select> or <input type='date'>. Use Shadcn Select and Calendar/Popover.",
+    "Ensure 'Sapa-Panti Sosial' is styled as text-amber-500 text-3xl font-serif.",
+    "In the Admin Dashboard, construct metrics cards and the bookings table cleanly without heavy card borders; use subtle background variations (bg-slate-800).",
+    "The header must NOT be fully transparent if content scrolls under it. Use bg-slate-900/80 backdrop-blur-xl.",
+    "Use Lucide-React for all icons (e.g., DoorOpen, Calendar, MapPin, Users, Settings, LayoutDashboard, CreditCard, CheckCircle).",
+    "Always add data-testid to your interactive components to ensure tests pass."
+  ],
+  "universal_guidelines_for_main_agent": [
+    "You tend to converge toward generic, 'on distribution' outputs. Make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. Always add transitions for specific interactive elements.",
+    "You MUST NOT center align the app container. Do not add .App { text-align: center; } in the css file.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Use sonner for toasts. Sonner component are located in /app/frontend/src/components/ui/sonner.jsx (or tsx)."
+  ]
+}
