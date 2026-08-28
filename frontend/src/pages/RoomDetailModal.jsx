@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
-import { CalendarIcon, Users, Check } from "lucide-react";
+import { CalendarIcon, Users, Check, AlertTriangle } from "lucide-react";
 import { useApp } from "../context/AppContext";
-import { fileUrl } from "../lib/api";
+import api, { fileUrl } from "../lib/api";
 import { formatRupiah, daysBetween, computeAddonTotal, formatDate } from "../lib/format";
 import {
   Dialog,
@@ -18,7 +18,10 @@ import { Calendar } from "../components/ui/calendar";
 
 function toISO(d) {
   if (!d) return "";
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export default function RoomDetailModal({ room, open, onClose }) {
@@ -29,6 +32,8 @@ export default function RoomDetailModal({ room, open, onClose }) {
   const [checkout, setCheckout] = useState(null);
   const [selected, setSelected] = useState({}); // id -> qty
   const [notes, setNotes] = useState("");
+  const [available, setAvailable] = useState(null); // null=unknown, true, false
+  const [checkingAvail, setCheckingAvail] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -36,10 +41,34 @@ export default function RoomDetailModal({ room, open, onClose }) {
       setCheckout(null);
       setSelected({});
       setNotes("");
+      setAvailable(null);
     }
   }, [open, room]);
 
   const days = useMemo(() => daysBetween(toISO(checkin), toISO(checkout)), [checkin, checkout]);
+
+  useEffect(() => {
+    if (!room || days <= 0) {
+      setAvailable(null);
+      return;
+    }
+    let cancelled = false;
+    setCheckingAvail(true);
+    api
+      .get("/availability", { params: { room_id: room.id, checkin: toISO(checkin), checkout: toISO(checkout) } })
+      .then(({ data }) => {
+        if (!cancelled) setAvailable(data.available);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailable(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingAvail(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [room, checkin, checkout, days]);
   const roomTotal = (room?.price || 0) * (days || 0);
 
   const addonLines = useMemo(() => {
@@ -90,7 +119,7 @@ export default function RoomDetailModal({ room, open, onClose }) {
   };
 
   if (!room) return null;
-  const canAdd = days > 0;
+  const canAdd = days > 0 && available !== false;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -177,9 +206,18 @@ export default function RoomDetailModal({ room, open, onClose }) {
             </div>
           </div>
           {days > 0 && (
-            <p className="mt-2 text-sm text-slate-400">
-              Durasi sewa: <span className="text-amber-400 font-medium">{days} hari</span>
-            </p>
+            <div className="mt-2 flex items-center gap-3 flex-wrap">
+              <p className="text-sm text-slate-400">
+                Durasi sewa: <span className="text-amber-400 font-medium">{days} hari</span>
+              </p>
+              {checkingAvail && <span className="text-xs text-slate-500">Memeriksa ketersediaan...</span>}
+              {!checkingAvail && available === true && (
+                <span data-testid="avail-ok" className="inline-flex items-center gap-1 text-xs text-emerald-400"><Check className="h-3 w-3" /> Tersedia</span>
+              )}
+              {!checkingAvail && available === false && (
+                <span data-testid="avail-no" className="inline-flex items-center gap-1 text-xs text-red-400"><AlertTriangle className="h-3 w-3" /> Sudah dibooking pada tanggal ini</span>
+              )}
+            </div>
           )}
 
           {/* Add-ons */}
@@ -245,8 +283,11 @@ export default function RoomDetailModal({ room, open, onClose }) {
               <div data-testid="modal-total" className="text-2xl font-bold text-amber-400">
                 {formatRupiah(grandTotal)}
               </div>
-              {!canAdd && (
+              {!canAdd && days <= 0 && (
                 <p className="text-xs text-amber-400/80">Pilih tanggal dulu.</p>
+              )}
+              {!canAdd && days > 0 && available === false && (
+                <p className="text-xs text-red-400/90">Ruangan sudah dibooking pada tanggal ini.</p>
               )}
             </div>
             <Button

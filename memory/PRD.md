@@ -22,15 +22,20 @@ Full-stack SPA "Sistem Sewa Gedung & Ruangan" untuk Panti Sosial Pemprov Kaliman
 - Admin: metrics, ruangan populer, breakdown status, tabel booking (ubah status + hapus + CSV), CMS pengaturan, CRUD akun.
 
 ## Implemented (2026-06)
-- ✅ Public landing: hero dinamis, katalog 4 kolom responsif, modal detail dengan date picker (Shadcn Calendar), add-on qty, catatan, sticky CTA.
+- ✅ Public landing: hero dinamis, katalog responsif, modal detail dengan date picker, add-on qty, catatan, sticky CTA.
 - ✅ Cart slide-over + checkout membuat booking status Pending; QRIS ditampilkan bila di-upload.
 - ✅ Admin JWT login (username+password), sesi 15 menit.
-- ✅ Admin Dashboard: metrics, popular rooms bars, status breakdown, tabel booking (status dropdown realtime, delete, export CSV).
-- ✅ Admin Settings/CMS: edit hero, harga ruangan + upload foto, harga add-on, upload QRIS, info pembayaran, save + reset.
-- ✅ Admin Accounts: CRUD admin, cegah username ganda, proteksi akun owner.
+- ✅ Admin Dashboard, Settings/CMS, Accounts CRUD.
 - ✅ Toast notifications (Sonner) top-right; format Rupiah.
-- ✅ Backend validation tanggal checkout > checkin.
-- Tested: backend 33/34 pytest, frontend e2e core flows 100%.
+
+## Iteration 2 (2026-06)
+- ✅ Cek ketersediaan: GET /api/availability + tolak double-booking (409) untuk ruangan+tanggal tumpang tindih (termasuk antar-item dalam 1 keranjang). Badge Tersedia/Sudah dibooking di modal.
+- ✅ Bukti pembayaran: tamu upload bukti bayar setelah checkout (POST /api/bookings/group/{group_id}/proof, image-only); admin lihat thumbnail & tandai Lunas/Belum (PATCH /api/bookings/{id}/payment).
+- ✅ Notifikasi WhatsApp: tombol wa.me di halaman sukses checkout berisi detail booking (nomor admin dari Settings).
+- ✅ Katalog dinamis: admin tambah/hapus ruangan & layanan tambahan, edit kapasitas/fasilitas/deskripsi.
+- ✅ Dashboard modern: recharts (bar pendapatan per ruangan + donut status), kolom status bayar & bukti.
+- ✅ Fix timezone off-by-one pada tanggal (WIB/WITA), teks ketersediaan diperbaiki.
+- Tested: backend iter2 21/21 + 33/34 regression; frontend 11/11 flow.
 
 ## Backlog / Remaining
 - P1: Server-side recompute totals from settings (anti price-tampering); Pydantic schema untuk settings.

@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 2 e2e test of the new SAPA features. Backend: added /app/backend/tests/test_iteration2.py (21 cases: availability free/overlap/adjacent/other-room/cancelled-frees-range, POST /bookings 409 overlap + 400 invalid dates, payment defaults unpaid/'' proof, public group proof upload + /api/files serving + whole-group propagation + 404 bad group, PATCH /payment auth/valid/invalid/404, settings add+remove room & addon + capacity/features/description + whatsapp_admin persistence, reset) -> 21/21 passed. Regression suite backend_test.py -> 33 passed, 1 xfail (no brute-force lockout, unchanged). Frontend (Playwright, public URL): room modal availability badge (avail-no for a fully-booked October range with add-to-cart disabled; avail-ok for a free November range with add-to-cart enabled), checkout calendar now opens on the check-in month (iteration-1 bug fixed), add-to-cart -> cart -> checkout -> success view with order-ref, WhatsApp link (falls back to api.whatsapp.com when no admin number; becomes https://wa.me/<number> once settings.whatsapp_admin is set - verified both), proof upload from success view (button becomes 'Bukti Bayar Terkirim' and booking.payment_proof set in API), admin login -> dashboard with 2 recharts (bar per room + donut status), proof thumbnail renders and opens the file URL, payment toggle Belum->Lunas persists in API and after reload and toggles back, Settings tab: Tambah Ruangan/Tambah Layanan add editors, save persists (public landing showed 5 cards incl. new room), remove room/add-on + save removes them. All test data cleaned up (only pre-existing 'Sari' and 'Budi' bookings remain; settings back to 4 default rooms/add-ons, whatsapp_admin restored to empty).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/bookings", "issue": "Overlap check only compares each item against the DB, not against the other items of the same payload. A single checkout containing two overlapping items for the SAME room (e.g. outdoor 2033-01-10..15 and 2033-01-12..14) returns 200 and creates a double booking. Verified live."},
+      {"endpoint": "POST /api/bookings/group/{group_id}/proof", "issue": "Public endpoint with no file-type/size validation: uploading evil.txt (text/plain) succeeds and is stored as payment_proof. Also anyone who knows/guesses a group_id can overwrite an existing proof (no ownership check / rate limit)."},
+      {"endpoint": "PUT /api/settings", "issue": "Still accepts an arbitrary dict with no Pydantic schema; a malformed rooms/addons payload can corrupt the single app_settings doc and break the public landing (carried over from iteration 1)."},
+      {"endpoint": "POST /api/bookings", "issue": "Client-supplied prices/totals are still trusted (price tampering); no cross-check against settings (carried over)."},
+      {"endpoint": "POST /api/auth/login", "issue": "No brute-force lockout/rate limiting (6 wrong passwords all 401) - playbook expects lockout after 5 (carried over, test_brute_force_lockout xfails)."},
+      {"endpoint": "CORS middleware", "issue": "allow_credentials=True with CORS_ORIGINS='*' remains an invalid combination; use explicit origins (carried over)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RoomDetailModal", "issue": "When the range is unavailable, the helper text under Total Estimasi still says 'Pilih tanggal dulu.' although both dates are already picked - misleading. Should say the room is booked on those dates.", "selector": "[data-testid=\"add-to-cart-btn\"] sibling text", "priority": "MEDIUM"},
+      {"component": "AdminSettings / AdminDashboard", "issue": "Room removal and booking deletion use native window.confirm() instead of Shadcn AlertDialog (inconsistent with the rest of the app; blocks automated flows unless a dialog handler is registered).", "selector": "[data-testid^=\"remove-room-\"], [data-testid^=\"booking-delete-\"]", "priority": "LOW"},
+      {"component": "Dialog/Sheet (Radix)", "issue": "Console warning still present: 'Missing Description or aria-describedby for DialogContent' on room detail and login modals (a11y).", "selector": "[role=\"dialog\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Date selection -> booking payload", "issue": "toISO() in RoomDetailModal uses Date.toISOString(), which converts local midnight to UTC. For any user in a positive-offset timezone (WIB/WITA UTC+7/+8 - the target audience) the selected day is sent one day earlier, so availability checks and stored check-in/out dates are off by one. Not reproducible in the test browser (TZ=UTC) but is a real defect; use local date formatting (getFullYear/getMonth/getDate).", "affected_selectors": ["[data-testid=\"checkin-trigger\"]", "[data-testid=\"checkout-trigger\"]"]},
+      {"flow": "Cart -> checkout", "issue": "Availability is only checked in the room modal; items sitting in the cart are not re-validated before checkout, and two overlapping cart items for the same room are accepted by the backend (see backend minor #1). A 409 from the server is surfaced as a toast only - the offending cart item is not highlighted/removed.", "affected_selectors": ["[data-testid=\"checkout-submit-btn\"]"]}
+    ],
+    "design_issues": [
+      {"screen": "Admin panel header", "issues": ["Sonner toasts still render top-right over the Logout button (visual overlap while a toast is visible)."]},
+      {"screen": "Admin Settings (sticky action bar)", "issues": ["The sticky 'Reset ke Default / Simpan Pengaturan' bar overlaps the room editor cards while scrolling (see screenshot admin_settings.png) - content passes under the buttons without a background gutter."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration2.py", "/app/backend/tests/backend_test.py", "/app/test_reports/pytest/iter2_results.xml", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "POST /api/bookings: also detect overlaps between the items inside the same payload (and dedupe room_id+range) before inserting.",
+    "Validate proof uploads: restrict content-type to image/* and cap size; consider requiring a booking ref/phone match instead of only group_id.",
+    "Replace Date.toISOString() in RoomDetailModal.toISO() with local-date formatting to avoid off-by-one dates in UTC+ timezones.",
+    "Fix the 'Pilih tanggal dulu.' helper text so it reflects the unavailable state when dates are chosen but the room is booked.",
+    "Re-validate cart items availability at checkout time and highlight the failing item when the API returns 409.",
+    "Carried over: add Pydantic schema for PUT /api/settings, recompute booking totals server-side, add login lockout, explicit CORS origins, Shadcn AlertDialog instead of window.confirm, DialogDescription for a11y."
+  ],
+  "critical_code_review_comments": [
+    "Overlap detection is duplicated between /api/availability and POST /api/bookings - extract one helper (and reuse it for intra-payload checks).",
+    "Storage calls (requests.put/get in put_object/get_object) are synchronous inside async endpoints and block the event loop on every upload/proof/file GET; wrap with run_in_threadpool.",
+    "GET /api/files/{path} forwards a user-supplied path to object storage even when no db.files record exists - require the DB record.",
+    "server.py still uses deprecated @app.on_event startup/shutdown; migrate to lifespan.",
+    "AdminSettings initialises `draft` only from the first render of settings (useState initialiser) with no useEffect sync - if settings load after mount the editor silently renders nothing (guarded by `if (!draft?.rooms) return null`)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration2.py", "/app/backend/tests/backend_test.py (booking_payload dates moved to 2031 so the new overlap check does not clash with seeded data)"],
+  "success_rate": {"backend": "100% of iteration-2 cases (21/21) + 33/34 regression (1 xfail: no brute-force lockout)", "frontend": "100% of the 11 requested flows functional; 2 integration gaps + 3 minor UI defects found"},
+  "seed_data_creation": "Created and then deleted: TEST_UI_BLOCK (meeting 2026-10-01..31 used to force the unavailable state), TEST_UI Guest2 (meeting 2026-11-10..12 with uploaded proof), TEST_WA Guest (vip 2027-02-05..07), TEST_dup / TEST_SelfOverlap probes, plus pytest bookings and one test room/add-on in settings. All removed; settings back to the 4 default rooms/4 add-ons and whatsapp_admin=''.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin / admin123 from /app/memory/test_credentials.md - valid; bcrypt hash verified to start with $2b$. Note: auth is Bearer token in localStorage by design, so the playbook's httpOnly-cookie checks are N/A; brute-force lockout is genuinely missing.",
+  "context_for_next_testing_agent": "Run backend: cd /app/backend && python -m pytest tests/ -q (pytest.ini already sets -n 2 --dist loadscope). test_iteration2.py covers availability/proof/payment/CMS and self-cleans (session fixture deletes its groups); it uses 2031-2032 dates - keep using far-future unique dates because POST /api/bookings now 409s on overlap. Playwright notes: calendar caption is div[aria-live=\"polite\"] inside [data-radix-popper-content-wrapper]; next-month button is 'div.space-x-1 button' nth(1); day buttons are button[name=\"day\"]. Register page.on('dialog', accept) before remove-room / booking-delete (native window.confirm). Pre-existing bookings kept: Sari (VIP 2026-12-10..12, marked Lunas) and Budi (Ballroom 2026-09-01..03).",
+  "rca_of_the_issue": "Intra-payload double booking: create_booking loops payload.items and queries db.bookings for each item, but the items of the current payload are inserted only after the whole validation loop, so two overlapping items for the same room in one checkout never see each other -> both inserted. Date off-by-one risk: RoomDetailModal.toISO() calls d.toISOString().slice(0,10) on a Date created at local midnight by react-day-picker; in UTC+7 that is 17:00 of the previous day UTC, yielding the previous calendar date in the payload/availability query."
+}

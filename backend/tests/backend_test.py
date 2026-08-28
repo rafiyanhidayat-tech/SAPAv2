@@ -144,14 +144,15 @@ class TestAuth:
 
 
 # ---------------- Bookings
-def booking_payload(name="TEST_Guest"):
+# use far-future unique dates so overlap check (iteration 2) does not clash with seeded data
+def booking_payload(name="TEST_Guest", checkin="2031-03-01", checkout="2031-03-03", room_id="ballroom", room_name="Ballroom"):
     return {
         "guest_name": name,
         "phone": "0812345678",
         "payment_method": "QRIS",
         "items": [{
-            "room_id": "ballroom", "room_name": "Ballroom",
-            "checkin": "2026-09-01", "checkout": "2026-09-03", "days": 2,
+            "room_id": room_id, "room_name": room_name,
+            "checkin": checkin, "checkout": checkout, "days": 2,
             "base_price": 2000000, "room_total": 4000000,
             "addons": [{"name": "Katering", "qty": 10, "unit_price": 75000, "total": 750000}],
             "addons_total": 750000, "notes": "TEST note", "total": 4750000,
@@ -207,7 +208,8 @@ class TestBookings:
         assert r.status_code == 401
 
     def test_delete_and_verify(self, auth, api):
-        r = api.post(f"{BASE_URL}/api/bookings", json=booking_payload("TEST_DeleteMe"))
+        r = api.post(f"{BASE_URL}/api/bookings", json=booking_payload("TEST_DeleteMe", "2031-04-01", "2031-04-03"))
+        assert r.status_code == 200, r.text[:300]
         gid = r.json()["group_id"]
         bid = [b for b in auth.get(f"{BASE_URL}/api/bookings").json() if b["group_id"] == gid][0]["id"]
         assert api.delete(f"{BASE_URL}/api/bookings/{bid}").status_code == 401

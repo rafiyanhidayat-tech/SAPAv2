@@ -147,7 +147,8 @@ DEFAULT_SETTINGS = {
         {"id": "eo", "name": "Jasa Event Organizer", "price": 20000000, "type": "flat", "unit": ""},
     ],
     "qris_image": "",
-    "payment_info": "Silakan lakukan pembayaran melalui QRIS di atas, lalu konfirmasi ke admin. Booking Anda berstatus Pending hingga pembayaran diverifikasi.",
+    "whatsapp_admin": "",
+    "payment_info": "Silakan lakukan pembayaran melalui QRIS di atas, lalu unggah bukti pembayaran. Booking Anda berstatus Pending hingga pembayaran diverifikasi admin.",
 }
 
 # ------------------------------------------------------------------ App
@@ -208,6 +209,10 @@ class CheckoutInput(BaseModel):
 
 class StatusUpdate(BaseModel):
     status: str
+
+
+class PaymentUpdate(BaseModel):
+    payment_status: str
 
 
 class SettingsUpdate(BaseModel):
@@ -296,9 +301,35 @@ async def create_booking(payload: CheckoutInput):
     created = []
     now = datetime.now(timezone.utc).isoformat()
     group_id = str(uuid.uuid4())
+
+    # Intra-payload check: reject overlapping items for the same room within one checkout
+    for i in range(len(payload.items)):
+        a = payload.items[i]
+        for j in range(i + 1, len(payload.items)):
+            b = payload.items[j]
+            if a.room_id == b.room_id and a.checkin < b.checkout and b.checkin < a.checkout:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Tanggal untuk {a.room_name} tumpang tindih di dalam keranjang Anda.",
+                )
+
+    # Availability check: reject overlapping bookings for same room (ignore cancelled)
     for item in payload.items:
         if not item.checkin or not item.checkout or item.checkout <= item.checkin:
             raise HTTPException(status_code=400, detail=f"Tanggal check-out harus setelah check-in untuk {item.room_name}")
+        clash = await db.bookings.find_one({
+            "room_id": item.room_id,
+            "status": {"$ne": "cancelled"},
+            "checkin": {"$lt": item.checkout},
+            "checkout": {"$gt": item.checkin},
+        })
+        if clash:
+            raise HTTPException(
+                status_code=409,
+                detail=f"{item.room_name} sudah dibooking pada rentang tanggal tersebut. Silakan pilih tanggal lain.",
+            )
+
+    for item in payload.items:
         doc = {
             "id": str(uuid.uuid4()),
             "group_id": group_id,
@@ -317,11 +348,52 @@ async def create_booking(payload: CheckoutInput):
             "notes": item.notes,
             "total": item.total,
             "status": "pending",
+            "payment_status": "unpaid",
+            "payment_proof": "",
             "created_at": now,
         }
         await db.bookings.insert_one({**doc})
         created.append(doc)
     return {"count": len(created), "group_id": group_id}
+
+
+@api_router.get("/availability")
+async def availability(room_id: str, checkin: str, checkout: str):
+    if not checkin or not checkout or checkout <= checkin:
+        return {"available": False, "reason": "Tanggal tidak valid"}
+    clash = await db.bookings.find_one({
+        "room_id": room_id,
+        "status": {"$ne": "cancelled"},
+        "checkin": {"$lt": checkout},
+        "checkout": {"$gt": checkin},
+    })
+    return {"available": clash is None}
+
+
+@api_router.post("/bookings/group/{group_id}/proof")
+async def upload_proof(group_id: str, file: UploadFile = File(...)):
+    existing = await db.bookings.find_one({"group_id": group_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Booking tidak ditemukan")
+    ext = (file.filename.rsplit(".", 1)[-1] if "." in file.filename else "png").lower()
+    if ext not in MIME_TYPES or not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="File harus berupa gambar (jpg, png, webp)")
+    content_type = MIME_TYPES.get(ext, "image/png")
+    path = f"{APP_NAME}/proofs/{uuid.uuid4()}.{ext}"
+    data = await file.read()
+    result = put_object(path, data, content_type)
+    canonical = result["path"]
+    await db.files.insert_one({
+        "id": str(uuid.uuid4()),
+        "storage_path": canonical,
+        "original_filename": file.filename,
+        "content_type": content_type,
+        "is_deleted": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    url = f"/api/files/{canonical}"
+    await db.bookings.update_many({"group_id": group_id}, {"$set": {"payment_proof": url}})
+    return {"url": url}
 
 
 @api_router.get("/bookings")
@@ -336,6 +408,16 @@ async def update_booking(booking_id: str, payload: StatusUpdate, admin: dict = D
     if payload.status not in valid:
         raise HTTPException(status_code=400, detail="Status tidak valid")
     res = await db.bookings.update_one({"id": booking_id}, {"$set": {"status": payload.status}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Booking tidak ditemukan")
+    return {"ok": True}
+
+
+@api_router.patch("/bookings/{booking_id}/payment")
+async def update_payment(booking_id: str, payload: PaymentUpdate, admin: dict = Depends(get_current_admin)):
+    if payload.payment_status not in ["unpaid", "paid"]:
+        raise HTTPException(status_code=400, detail="Status pembayaran tidak valid")
+    res = await db.bookings.update_one({"id": booking_id}, {"$set": {"payment_status": payload.payment_status}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Booking tidak ditemukan")
     return {"ok": True}
