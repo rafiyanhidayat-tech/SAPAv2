@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only Playwright testing of the redesigned AdminSettings room management (SAPA). Flow: admin-logo-btn -> admin login (admin/admin123) -> tab-settings. Verified: 4 default room cards render (settings-room-meeting/ballroom/vip/outdoor) each with Ubah + delete buttons; 'Tambah Ruangan' opens RoomFormDialog; validation blocks empty Nama ('Nama ruangan wajib diisi') and price 0 ('Harga per hari harus lebih dari 0') and the dialog stays open with no room created; FeatureTags add via Enter (3 chips) and chip removal work; submit created 'TEST_Ruang QA' (cap 55, Rp 1.234.000, 2 features) with toast 'Ruangan ditambahkan', dialog closed, card appeared, and it IMMEDIATELY persisted to backend (GET /api/settings contained it) and showed on the public landing catalogue after reload (name + Rp 1.234.000 visible); edit-room-{id} opened the dialog PRE-FILLED (name/capacity/price/desc/features all correct), rename -> 'Ruangan diperbarui' toast + card + backend updated; remove-room-{id} opened an AlertDialog naming the room, 'Batal' kept the room, confirm-delete-room removed it with toast 'Ruangan dihapus' and removed it from backend/public catalogue; unsaved-banner appears on hero-title edit, 'Batal' reverts value + hides banner, settings-save-btn saves hero_title + whatsapp_admin (verified in GET /api/settings) and banner disappears; addon regression: add-addon-btn adds a row -> banner -> save persisted (TEST_Addon QA / 45000) and remove-addon-{id} + save removed it; empty state: deleting all 4 rooms shows the dashed empty panel with add-first-room-btn; settings-reset-btn restored the 4 default rooms and default hero/whatsapp. Photo URL paste in roomform-photo-url renders a live preview (naturalWidth 1880) and roomform-photo-upload is visible. Environment left CLEAN: GET /api/settings = 4 default rooms, default hero title, no TEST_ data.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RoomFormDialog", "issues": ["The 'Kapasitas (orang)' and 'Harga per Hari (Rp) *' fields in the 2-col grid are vertically misaligned (~6px) because the capacity label has an icon and the price label wraps differently - use items-end or a fixed label height", "Long pasted image URLs overflow the small input with no truncation/tooltip (cosmetic)"]},
+      {"screen": "Katalog Ruangan cards", "issues": ["Room card grid leaves a large empty gap when room count is not a multiple of 3 (cosmetic only)"]},
+      {"screen": "Pembayaran & Kontak", "issues": ["'Kembalikan semua pengaturan ke bawaan' (settings-reset-btn) is a destructive one-click action with NO confirmation - it wipes all rooms/hero/addons/QRIS instantly. Should use the same AlertDialog pattern now used for room delete."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_4.json"],
+  "action_items": [
+    "Wrap settings-reset-btn in an AlertDialog confirmation (destructive, currently instant).",
+    "Fix a11y console warning 'Missing Description or aria-describedby for DialogContent' (2 occurrences, emitted from a dialog other than RoomFormDialog - likely AdminLoginModal / RoomDetailModal).",
+    "Fix vertical alignment of Kapasitas vs Harga fields in RoomFormDialog.",
+    "Recharts console warning on the admin Dashboard: 'width(-1) and height(-1) of chart should be greater than 0' - chart container has no min height while the tab is hidden (pre-existing, non-blocking)."
+  ],
+  "critical_code_review_comments": [
+    "AdminSettings.jsx persist() writes the whole draft on add/edit/delete room, so any UNSAVED edits in other sections (hero, addons, QRIS) are silently committed along with a room add/delete. Consider persisting only the rooms slice or warning the user.",
+    "RoomFormDialog useEffect deps are [open, initial]; if a parent re-render produced a new `initial` object while the dialog is open the in-progress form would be reset. Safe today (editingRoom is a stable draft reference) but fragile - key the dialog by editId instead.",
+    "No client-side dedupe of room names/ids and no Pydantic schema on PUT /api/settings (carried over from iteration 3) - malformed settings can be stored."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend-only request)", "frontend": "100% (9/9 tested flows passed)"},
+  "seed_data_creation": "Temporary 'TEST_Ruang QA' room and 'TEST_Addon QA' add-on created then deleted; settings reset to the 4 default rooms via settings-reset-btn at the end.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin / admin123 (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "Login: click [data-testid=admin-logo-btn] -> admin-login-username/password/submit -> tab-settings. Session persists across reloads (token in localStorage), so admin-logo-btn is absent after reload - guard the login step. Toast selector is [data-sonner-toast] (old toasts linger ~4s, read all of them). Room ids: meeting/ballroom/vip/outdoor + 'room-<timestamp>'. Verify persistence with page.request.get('<REACT_APP_BACKEND_URL>/api/settings'). settings-reset-btn restores defaults instantly (whatsapp_admin and qris_image are EMPTY in defaults, by design in server.py).",
+  "rca_of_the_issue": "No functional defects found in this iteration; all reported items are UX/a11y/robustness nits."
+}
