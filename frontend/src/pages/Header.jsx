@@ -18,9 +18,11 @@ export default function Header({ onOpenCart, onOpenAdmin }) {
           title="Akses Admin"
           className="flex items-center gap-3 group"
         >
-          <span className="grid place-items-center h-11 w-11 rounded-full bg-amber-500 text-slate-900 font-serif text-xl font-black shadow-[0_8px_24px_rgba(245,158,11,0.35)] group-hover:scale-105 transition-transform duration-300">
-            S
-          </span>
+          <img
+            src="/logo-kaltara.png"
+            alt="Logo Provinsi Kalimantan Utara"
+            className="h-12 w-12 object-contain drop-shadow-[0_4px_12px_rgba(245,158,11,0.25)] group-hover:scale-105 transition-transform duration-300"
+          />
           <span className="text-left leading-tight">
             <span className="block font-serif text-3xl text-amber-500 font-medium tracking-tight">
               Sapa-Panti Sosial

@@ -34,6 +34,25 @@ export default function RoomDetailModal({ room, open, onClose }) {
   const [notes, setNotes] = useState("");
   const [available, setAvailable] = useState(null); // null=unknown, true, false
   const [checkingAvail, setCheckingAvail] = useState(false);
+  const [booked, setBooked] = useState([]);
+
+  useEffect(() => {
+    if (open && room) {
+      api.get(`/rooms/${room.id}/booked`).then(({ data }) => setBooked(data)).catch(() => setBooked([]));
+    }
+  }, [open, room]);
+
+  const today = useMemo(() => new Date(new Date().setHours(0, 0, 0, 0)), []);
+  const disabledRanges = useMemo(
+    () =>
+      booked.map((b) => {
+        const from = new Date(b.checkin + "T00:00:00");
+        const to = new Date(b.checkout + "T00:00:00");
+        to.setDate(to.getDate() - 1); // last occupied night
+        return { from, to };
+      }),
+    [booked]
+  );
 
   useEffect(() => {
     if (open) {
@@ -175,7 +194,9 @@ export default function RoomDetailModal({ room, open, onClose }) {
                       setCheckin(d);
                       if (checkout && d && checkout <= d) setCheckout(null);
                     }}
-                    disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
+                    disabled={[{ before: today }, ...disabledRanges]}
+                    modifiers={{ booked: disabledRanges }}
+                    modifiersClassNames={{ booked: "rdp-booked" }}
                   />
                 </PopoverContent>
               </Popover>
@@ -199,7 +220,9 @@ export default function RoomDetailModal({ room, open, onClose }) {
                     selected={checkout}
                     onSelect={setCheckout}
                     defaultMonth={checkin || undefined}
-                    disabled={(d) => !checkin || d <= checkin}
+                    disabled={[(d) => !checkin || d <= checkin, ...disabledRanges]}
+                    modifiers={{ booked: disabledRanges }}
+                    modifiersClassNames={{ booked: "rdp-booked" }}
                   />
                 </PopoverContent>
               </Popover>
@@ -217,6 +240,24 @@ export default function RoomDetailModal({ room, open, onClose }) {
               {!checkingAvail && available === false && (
                 <span data-testid="avail-no" className="inline-flex items-center gap-1 text-xs text-red-400"><AlertTriangle className="h-3 w-3" /> Sudah dibooking pada tanggal ini</span>
               )}
+            </div>
+          )}
+
+          {booked.length > 0 && (
+            <div className="mt-3 rounded-lg bg-slate-900/60 border border-slate-700/60 p-3">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                <CalendarIcon className="h-3.5 w-3.5 text-red-400" /> Tanggal yang sudah penuh:
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {booked.slice(0, 8).map((b, i) => (
+                  <span key={i} data-testid="booked-range" className="text-[11px] px-2 py-1 rounded-md bg-red-500/10 text-red-300 border border-red-500/20">
+                    {formatDate(b.checkin)} – {formatDate(b.checkout)}
+                  </span>
+                ))}
+                {booked.length > 8 && (
+                  <span className="text-[11px] px-2 py-1 rounded-md bg-slate-700/50 text-slate-400">+{booked.length - 8} lainnya</span>
+                )}
+              </div>
             </div>
           )}
 

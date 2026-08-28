@@ -78,6 +78,14 @@ body {
     background: #f59e0b;
 }
 
+.rdp-booked:not(.rdp-day_outside) {
+    color: #f87171 !important;
+    opacity: 1 !important;
+    text-decoration: line-through;
+    text-decoration-color: #ef4444;
+    font-weight: 600;
+}
+
 @keyframes fade-up {
     from {
         opacity: 0;

@@ -37,10 +37,16 @@ Full-stack SPA "Sistem Sewa Gedung & Ruangan" untuk Panti Sosial Pemprov Kaliman
 - ✅ Fix timezone off-by-one pada tanggal (WIB/WITA), teks ketersediaan diperbaiki.
 - Tested: backend iter2 21/21 + 33/34 regression; frontend 11/11 flow.
 
+## Iteration 3 (2026-06)
+- ✅ Logo resmi Kalimantan Utara (BENUANTA) di header (public/logo-kaltara.png dari Wikimedia).
+- ✅ Kalender ketersediaan per ruangan: GET /api/rooms/{id}/booked; tanggal penuh di-disable & merah di date picker + chip "Tanggal penuh".
+- ✅ Kwitansi PDF: GET /api/bookings/{id}/receipt (reportlab + logo), hanya Lunas & non-cancelled; tombol unduh di dashboard.
+- ✅ Konfirmasi WhatsApp tamu: mark Lunas → wa.me ke nomor tamu (pesan LUNAS); tombol WA per baris paid.
+- ✅ Hardening: tolak check-in masa lalu, logo PDF diperkecil (~40KB), unduhan blob diperbaiki.
+- Tested: backend iter3 10/10 + full suite 64 passed/1 xfail; frontend 8/8 flow.
+
 ## Backlog / Remaining
-- P1: Server-side recompute totals from settings (anti price-tampering); Pydantic schema untuk settings.
-- P2: Brute-force lockout pada login; migrasi ke lifespan handlers; run_in_threadpool untuk storage I/O; DialogDescription a11y; Shadcn AlertDialog untuk konfirmasi reset/hapus.
-- P2: Pembayaran nyata / verifikasi QRIS otomatis (saat ini manual via status Pending).
+- Login brute-force lockout, CORS origin eksplisit, Pydantic schema PUT /settings, recompute total server-side, migrasi lifespan, Shadcn AlertDialog pengganti window.confirm, DialogDescription a11y.
 
 ## Credentials
 Admin owner: username `admin` / password `admin123` (email record: rafiyanhidayat@gmail.com). See /app/memory/test_credentials.md.

@@ -10,6 +10,8 @@ import {
   BadgeCheck,
   Receipt,
   TrendingUp,
+  FileText,
+  MessageCircle,
 } from "lucide-react";
 import {
   BarChart,
@@ -103,12 +105,55 @@ export default function AdminDashboard({ bookings, reload }) {
   };
 
   const togglePaid = async (b) => {
+    const willBePaid = b.payment_status !== "paid";
     try {
-      await api.patch(`/bookings/${b.id}/payment`, { payment_status: b.payment_status === "paid" ? "unpaid" : "paid" });
-      toast.success(b.payment_status === "paid" ? "Ditandai Belum Lunas" : "Ditandai Lunas");
+      await api.patch(`/bookings/${b.id}/payment`, { payment_status: willBePaid ? "paid" : "unpaid" });
+      toast.success(willBePaid ? "Ditandai Lunas" : "Ditandai Belum Lunas");
       reload();
+      if (willBePaid) notifyGuestPaid(b);
     } catch (e) {
       toast.error(apiErr(e));
+    }
+  };
+
+  const normalizePhone = (p) => {
+    let d = (p || "").replace(/\D/g, "");
+    if (d.startsWith("0")) d = "62" + d.slice(1);
+    return d;
+  };
+
+  const notifyGuestPaid = (b) => {
+    const ref = b.group_id.slice(0, 8).toUpperCase();
+    const msg = `Halo ${b.guest_name}, pembayaran booking *${b.room_name}* (Ref ${ref}) telah kami terima. Status: *LUNAS*. Total ${formatRupiah(b.total)}. Terima kasih - Sapa-Panti Sosial.`;
+    const num = normalizePhone(b.phone);
+    const link = num
+      ? `https://wa.me/${num}?text=${encodeURIComponent(msg)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+    const w = window.open(link, "_blank");
+    if (!w) toast.info("Popup diblokir. Klik tombol WhatsApp di baris untuk kirim konfirmasi.");
+  };
+
+  const downloadReceipt = async (b) => {
+    try {
+      const res = await api.get(`/bookings/${b.id}/receipt`, { responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `kwitansi-${b.group_id.slice(0, 8).toUpperCase()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      toast.success("Kwitansi diunduh");
+    } catch (e) {
+      let msg = "Gagal membuat kwitansi";
+      try {
+        if (e?.response?.data instanceof Blob) {
+          const txt = await e.response.data.text();
+          msg = JSON.parse(txt).detail || msg;
+        }
+      } catch {}
+      toast.error(msg);
     }
   };
 
@@ -266,6 +311,16 @@ export default function AdminDashboard({ bookings, reload }) {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-2">
+                      {b.payment_status === "paid" && (
+                        <>
+                          <button data-testid={`receipt-btn-${b.id}`} onClick={() => downloadReceipt(b)} title="Unduh Kwitansi PDF" className="text-slate-400 hover:text-amber-400 transition-colors">
+                            <FileText className="h-4 w-4" />
+                          </button>
+                          <button data-testid={`wa-guest-${b.id}`} onClick={() => notifyGuestPaid(b)} title="Kirim konfirmasi WhatsApp ke tamu" className="text-slate-400 hover:text-emerald-400 transition-colors">
+                            <MessageCircle className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
                       <Select value={b.status} onValueChange={(v) => changeStatus(b.id, v)}>
                         <SelectTrigger data-testid={`status-dropdown-${b.id}`} className="w-32 h-9 bg-slate-900 border-slate-700 text-slate-100 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-slate-800 border-slate-700 text-slate-100">

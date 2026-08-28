@@ -15,6 +15,7 @@ import uuid
 import bcrypt
 import jwt
 import requests
+from io import BytesIO
 from datetime import datetime, timezone, timedelta
 
 # ------------------------------------------------------------------ DB
@@ -301,10 +302,13 @@ async def create_booking(payload: CheckoutInput):
     created = []
     now = datetime.now(timezone.utc).isoformat()
     group_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Intra-payload check: reject overlapping items for the same room within one checkout
     for i in range(len(payload.items)):
         a = payload.items[i]
+        if a.checkin < today:
+            raise HTTPException(status_code=400, detail=f"Tanggal check-in untuk {a.room_name} tidak boleh di masa lalu")
         for j in range(i + 1, len(payload.items)):
             b = payload.items[j]
             if a.room_id == b.room_id and a.checkin < b.checkout and b.checkin < a.checkout:
@@ -370,6 +374,16 @@ async def availability(room_id: str, checkin: str, checkout: str):
     return {"available": clash is None}
 
 
+@api_router.get("/rooms/{room_id}/booked")
+async def booked_ranges(room_id: str):
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    docs = await db.bookings.find(
+        {"room_id": room_id, "status": {"$ne": "cancelled"}, "checkout": {"$gte": today}},
+        {"_id": 0, "checkin": 1, "checkout": 1},
+    ).sort("checkin", 1).to_list(500)
+    return [{"checkin": d["checkin"], "checkout": d["checkout"]} for d in docs]
+
+
 @api_router.post("/bookings/group/{group_id}/proof")
 async def upload_proof(group_id: str, file: UploadFile = File(...)):
     existing = await db.bookings.find_one({"group_id": group_id})
@@ -421,6 +435,122 @@ async def update_payment(booking_id: str, payload: PaymentUpdate, admin: dict = 
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Booking tidak ditemukan")
     return {"ok": True}
+
+
+def _rp(n):
+    try:
+        return "Rp " + f"{int(round(n)):,}".replace(",", ".")
+    except Exception:
+        return "Rp 0"
+
+
+def _fmt_date(s):
+    try:
+        return datetime.fromisoformat(s).strftime("%d %b %Y")
+    except Exception:
+        return s or "-"
+
+
+def build_receipt_pdf(b: dict) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=18 * mm, bottomMargin=18 * mm, leftMargin=18 * mm, rightMargin=18 * mm)
+    styles = getSampleStyleSheet()
+    slate = colors.HexColor("#0f172a")
+    amber = colors.HexColor("#b45309")
+    muted = colors.HexColor("#64748b")
+
+    h_title = ParagraphStyle("t", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=20, textColor=slate, spaceAfter=2)
+    h_sub = ParagraphStyle("s", parent=styles["Normal"], fontSize=9, textColor=muted)
+    label = ParagraphStyle("l", parent=styles["Normal"], fontSize=9, textColor=muted)
+    val = ParagraphStyle("v", parent=styles["Normal"], fontSize=11, textColor=slate)
+
+    story = []
+    logo_path = Path("/app/backend/logo-receipt.png")
+    if not logo_path.exists():
+        logo_path = Path("/app/frontend/public/logo-kaltara.png")
+    header_cells = []
+    if logo_path.exists():
+        header_cells.append(RLImage(str(logo_path), width=22 * mm, height=22 * mm))
+    else:
+        header_cells.append(Paragraph("", h_sub))
+    header_cells.append([
+        Paragraph("KWITANSI PEMBAYARAN", h_title),
+        Paragraph("Sapa-Panti Sosial &mdash; Pemerintah Provinsi Kalimantan Utara", h_sub),
+        Paragraph("Sewa Gedung &amp; Ruangan", h_sub),
+    ])
+    ht = Table([[header_cells[0], header_cells[1]]], colWidths=[26 * mm, 148 * mm])
+    ht.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+    story.append(ht)
+    story.append(Spacer(1, 8 * mm))
+
+    ref = b["group_id"][:8].upper()
+    meta = Table([
+        [Paragraph("No. Kwitansi", label), Paragraph(ref, val), Paragraph("Tanggal", label), Paragraph(_fmt_date(datetime.now(timezone.utc).isoformat()), val)],
+        [Paragraph("Nama Tamu", label), Paragraph(b.get("guest_name", "-"), val), Paragraph("No. Telepon", label), Paragraph(b.get("phone", "-"), val)],
+        [Paragraph("Metode Bayar", label), Paragraph(b.get("payment_method", "-"), val), Paragraph("Status", label), Paragraph("<b>LUNAS</b>", ParagraphStyle("ok", parent=val, textColor=colors.HexColor("#047857")))],
+    ], colWidths=[28 * mm, 59 * mm, 28 * mm, 59 * mm])
+    meta.setStyle(TableStyle([("BOTTOMPADDING", (0, 0), (-1, -1), 6), ("TOPPADDING", (0, 0), (-1, -1), 2)]))
+    story.append(meta)
+    story.append(Spacer(1, 6 * mm))
+
+    rows = [["Deskripsi", "Detail", "Jumlah"]]
+    rows.append([
+        f"Sewa {b.get('room_name','')}",
+        f"{_fmt_date(b.get('checkin'))} - {_fmt_date(b.get('checkout'))} ({b.get('days',0)} hari)",
+        _rp(b.get("room_total", 0)),
+    ])
+    for a in b.get("addons", []):
+        qty = a.get("qty", 1)
+        rows.append([a.get("name", ""), f"{qty} x {_rp(a.get('unit_price', 0))}" if qty else "", _rp(a.get("total", 0))])
+    rows.append(["", "TOTAL", _rp(b.get("total", 0))])
+
+    t = Table(rows, colWidths=[74 * mm, 62 * mm, 38 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), slate),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+        ("ALIGN", (1, 1), (1, -1), "LEFT"),
+        ("LINEBELOW", (0, 1), (-1, -2), 0.4, colors.HexColor("#e2e8f0")),
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#fef3c7")),
+        ("FONTNAME", (1, -1), (-1, -1), "Helvetica-Bold"),
+        ("TEXTCOLOR", (2, -1), (2, -1), amber),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 12 * mm))
+    story.append(Paragraph("Terima kasih atas kepercayaan Anda. Kwitansi ini sah tanpa tanda tangan basah dan diterbitkan secara elektronik oleh sistem SAPA.", h_sub))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+@api_router.get("/bookings/{booking_id}/receipt")
+async def booking_receipt(booking_id: str, admin: dict = Depends(get_current_admin)):
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking tidak ditemukan")
+    if b.get("payment_status") != "paid":
+        raise HTTPException(status_code=400, detail="Kwitansi hanya tersedia untuk booking yang sudah Lunas")
+    if b.get("status") == "cancelled":
+        raise HTTPException(status_code=400, detail="Booking dibatalkan, kwitansi tidak tersedia")
+    pdf = build_receipt_pdf(b)
+    ref = b["group_id"][:8].upper()
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="kwitansi-{ref}.pdf"'},
+    )
 
 
 @api_router.delete("/bookings/{booking_id}")
