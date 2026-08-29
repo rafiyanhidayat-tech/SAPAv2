@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Settings, Users, LogOut, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, Settings, Users, LogOut, ArrowLeft, BookOpen } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import api, { apiErr } from "../lib/api";
 import { toast } from "sonner";
@@ -58,9 +58,20 @@ export default function AdminPanel() {
               <div className="text-xs text-slate-500">Masuk sebagai {admin.name}</div>
             </div>
           </div>
-          <Button data-testid="admin-logout-btn" onClick={handleLogout} variant="outline" className="rounded-full border-slate-600 text-slate-200 hover:bg-slate-800">
-            <LogOut className="h-4 w-4 mr-2" /> Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <a
+              data-testid="guide-download-admin"
+              href={`${process.env.REACT_APP_BACKEND_URL}/api/guide`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-slate-600 text-slate-200 hover:bg-slate-800 hover:text-amber-400 px-4 h-10 text-sm transition-colors"
+            >
+              <BookOpen className="h-4 w-4" /> Panduan
+            </a>
+            <Button data-testid="admin-logout-btn" onClick={handleLogout} variant="outline" className="rounded-full border-slate-600 text-slate-200 hover:bg-slate-800">
+              <LogOut className="h-4 w-4 mr-2" /> Logout
+            </Button>
+          </div>
         </div>
       </header>
 

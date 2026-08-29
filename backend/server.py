@@ -291,9 +291,9 @@ async def download(path: str):
     ct = record.get("content_type") if record else None
     try:
         data, content_type = get_object(path)
+        return Response(content=data, media_type=ct or content_type)
     except Exception:
         raise HTTPException(status_code=404, detail="File tidak ditemukan")
-    return Response(content=data, media_type=ct or content_type)
 
 
 # ------------------------------------------------------------------ Bookings
@@ -551,6 +551,193 @@ async def booking_receipt(booking_id: str, admin: dict = Depends(get_current_adm
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="kwitansi-{ref}.pdf"'},
     )
+
+
+def _mindmap_drawing():
+    from reportlab.graphics.shapes import Drawing, Rect, String, Line
+    from reportlab.lib import colors
+
+    W, H = 515, 640
+    dwg = Drawing(W, H)
+    slate = colors.HexColor("#1e293b")
+    amber = colors.HexColor("#f59e0b")
+    slate_border = colors.HexColor("#334155")
+    white = colors.HexColor("#f8fafc")
+    dark = colors.HexColor("#0f172a")
+
+    def node(x, y, w, h, lines, fill, fg, fs=8, bold=True, rx=7):
+        dwg.add(Rect(x, y, w, h, rx=rx, ry=rx, fillColor=fill, strokeColor=slate_border, strokeWidth=0.8))
+        font = "Helvetica-Bold" if bold else "Helvetica"
+        n = len(lines)
+        for i, txt in enumerate(lines):
+            ty = y + h / 2 + (n - 1) * (fs + 1) / 2 - i * (fs + 1) - fs / 2 + 1
+            dwg.add(String(x + w / 2, ty, txt, fontName=font, fontSize=fs, fillColor=fg, textAnchor="middle"))
+
+    def connect(x1, y1, x2, y2):
+        dwg.add(Line(x1, y1, x2, y2, strokeColor=amber, strokeWidth=1.2))
+
+    # Root
+    root_x, root_y, root_w, root_h = 8, 300, 120, 56
+    root_cy = root_y + root_h / 2
+
+    branches = [
+        ("HALAMAN PUBLIK", 540, ["Hero & Brand", "Katalog Ruangan", "Detail + Kalender"]),
+        ("PEMESANAN", 380, ["Keranjang", "Checkout + QRIS", "WhatsApp + Bukti"]),
+        ("ADMIN DASHBOARD", 220, ["Metrics & Grafik", "Tabel + Status/Lunas", "Kwitansi PDF & CSV"]),
+        ("ADMIN PENGATURAN", 70, ["Konten Hero", "Ruangan (CRUD)", "Layanan/QRIS/WA"]),
+    ]
+
+    bx, bw, bh = 172, 150, 44
+    sx, sw, sh = 358, 150, 28
+
+    for name, by, subs in branches:
+        bcy = by + bh / 2
+        connect(root_x + root_w, root_cy, bx, bcy)
+        node(bx, by, bw, bh, [name], slate, amber, fs=9)
+        offsets = [42, 0, -42]
+        for sub, off in zip(subs, offsets):
+            scy = bcy + off
+            sy = scy - sh / 2
+            connect(bx + bw, bcy, sx, scy)
+            node(sx, sy, sw, sh, [sub], dark, white, fs=7.5, bold=False)
+
+    node(root_x, root_y, root_w, root_h, ["SAPA", "Sewa Gedung"], amber, dark, fs=11)
+    return dwg
+
+
+def build_guide_pdf() -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, PageBreak, ListFlowable, ListItem
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=18 * mm, bottomMargin=16 * mm, leftMargin=18 * mm, rightMargin=18 * mm)
+    styles = getSampleStyleSheet()
+    slate = colors.HexColor("#0f172a")
+    amber = colors.HexColor("#b45309")
+    muted = colors.HexColor("#475569")
+
+    cover_title = ParagraphStyle("ct", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=26, textColor=slate, alignment=1, spaceAfter=6, leading=30)
+    cover_sub = ParagraphStyle("cs", parent=styles["Normal"], fontSize=12, textColor=muted, alignment=1, leading=18)
+    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontName="Helvetica-Bold", fontSize=16, textColor=slate, spaceBefore=6, spaceAfter=8)
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=12.5, textColor=amber, spaceBefore=10, spaceAfter=4)
+    body = ParagraphStyle("bd", parent=styles["Normal"], fontSize=10.5, textColor=colors.HexColor("#1f2937"), leading=16)
+    small = ParagraphStyle("sm", parent=styles["Normal"], fontSize=9, textColor=muted, alignment=1)
+
+    def bullets(items):
+        return ListFlowable(
+            [ListItem(Paragraph(t, body), leftIndent=8, value="•") for t in items],
+            bulletType="bullet", start="•", leftIndent=14, bulletColor=amber,
+        )
+
+    story = []
+    logo = Path("/app/backend/logo-receipt.png")
+    if not logo.exists():
+        logo = Path("/app/frontend/public/logo-kaltara.png")
+    story.append(Spacer(1, 40 * mm))
+    if logo.exists():
+        img = RLImage(str(logo), width=34 * mm, height=34 * mm)
+        img.hAlign = "CENTER"
+        story.append(img)
+    story.append(Spacer(1, 8 * mm))
+    story.append(Paragraph("Buku Panduan Penggunaan", cover_title))
+    story.append(Paragraph("SAPA &mdash; Sistem Sewa Gedung &amp; Ruangan", cover_sub))
+    story.append(Paragraph("Panti Sosial &bull; Pemerintah Provinsi Kalimantan Utara", cover_sub))
+    story.append(Spacer(1, 30 * mm))
+    story.append(Paragraph("Dokumen ini menjelaskan cara menggunakan website, baik untuk tamu (pemesan) maupun admin pengelola.", small))
+    story.append(PageBreak())
+
+    # Mind map page
+    story.append(Paragraph("Peta Fitur Website (Mind Map)", h1))
+    story.append(Paragraph("Gambaran menyeluruh alur dan fitur aplikasi:", body))
+    story.append(Spacer(1, 4 * mm))
+    mm_dwg = _mindmap_drawing()
+    mm_dwg.hAlign = "CENTER"
+    story.append(mm_dwg)
+    story.append(PageBreak())
+
+    # 1. Tentang
+    story.append(Paragraph("1. Tentang Aplikasi", h1))
+    story.append(Paragraph("SAPA adalah sistem penyewaan gedung dan ruangan milik Panti Sosial Pemprov Kalimantan Utara. Tamu dapat melihat katalog ruangan, memilih tanggal, menambahkan layanan tambahan, dan melakukan pemesanan. Admin mengelola pesanan, harga, konten, pembayaran, dan akun.", body))
+    story.append(Paragraph("Alamat login admin: klik logo Kalimantan Utara di kiri atas halaman, lalu masukkan username & password.", body))
+
+    # 2. Panduan Tamu
+    story.append(Paragraph("2. Panduan untuk Tamu (Pemesan)", h1))
+    story.append(Paragraph("Memesan Ruangan", h2))
+    story.append(bullets([
+        "Buka halaman utama, gulir ke bagian <b>Katalog Ruangan</b>.",
+        "Klik kartu ruangan untuk membuka detail. Baca fasilitas dan lihat <b>Tanggal yang sudah penuh</b>.",
+        "Pilih tanggal <b>Check-in</b> dan <b>Check-out</b>. Tanggal merah/dicoret berarti sudah dibooking dan tidak bisa dipilih.",
+        "Centang <b>Layanan Tambahan</b> bila perlu (MC, Katering, Pelayan, EO) dan isi jumlahnya.",
+        "Isi <b>Catatan Khusus</b> bila ada, lalu klik <b>Tambah ke Keranjang</b>.",
+    ]))
+    story.append(Paragraph("Checkout &amp; Pembayaran", h2))
+    story.append(bullets([
+        "Buka <b>Keranjang</b> di kanan atas, periksa rincian dan Grand Total.",
+        "Isi <b>Nama Tamu</b> dan <b>No. Telepon</b>, pilih <b>Metode Pembayaran</b>.",
+        "Jika memilih <b>QRIS</b>, scan kode QRIS yang ditampilkan untuk membayar.",
+        "Klik <b>Checkout</b>. Status pesanan menjadi <b>Pending</b> menunggu verifikasi.",
+        "Pada halaman sukses, tekan <b>Kirim Detail via WhatsApp</b> dan <b>Upload Bukti Pembayaran</b>.",
+    ]))
+
+    # 3. Panduan Admin
+    story.append(PageBreak())
+    story.append(Paragraph("3. Panduan untuk Admin", h1))
+    story.append(Paragraph("Masuk (Login)", h2))
+    story.append(bullets([
+        "Klik logo Kalimantan Utara di pojok kiri atas.",
+        "Masukkan <b>username</b> dan <b>password</b>. Sesi otomatis berakhir setelah 15 menit.",
+    ]))
+    story.append(Paragraph("Tab Dashboard", h2))
+    story.append(bullets([
+        "Lihat ringkasan: Total Pendapatan, Sudah Lunas, Total Pesanan, Menunggu.",
+        "Grafik <b>Pendapatan per Ruangan</b> dan diagram <b>Status Pesanan</b>.",
+        "Tabel <b>Data Booking</b>: ubah status (Pending/Confirmed/Done/Cancelled) lewat dropdown.",
+        "Kolom <b>Bayar</b>: klik untuk menandai <b>Lunas/Belum</b>. Saat ditandai Lunas, WhatsApp konfirmasi ke tamu otomatis terbuka.",
+        "Untuk pesanan Lunas: tombol <b>dokumen</b> mengunduh <b>Kwitansi PDF</b>, tombol <b>WhatsApp</b> mengirim ulang konfirmasi.",
+        "<b>Download CSV</b> untuk mengekspor seluruh data booking.",
+    ]))
+    story.append(Paragraph("Tab Pengaturan", h2))
+    story.append(bullets([
+        "<b>Konten Hero</b>: ubah judul, subjudul, dan gambar utama.",
+        "<b>Katalog Ruangan</b>: klik <b>Tambah Ruangan</b> lalu isi form terpandu (nama, kapasitas, harga, deskripsi, fasilitas berupa tag, foto). Perubahan langsung tersimpan.",
+        "Klik <b>Ubah</b> pada kartu ruangan untuk mengedit, atau ikon hapus (ada konfirmasi) untuk menghapus.",
+        "<b>Layanan Tambahan</b>: tambah/hapus layanan dan atur harga serta tipe.",
+        "<b>Pembayaran &amp; Kontak</b>: unggah gambar <b>QRIS</b>, isi <b>No. WhatsApp Admin</b>, dan info pembayaran.",
+        "Perubahan teks memunculkan banner <b>Simpan Perubahan</b> — jangan lupa menyimpan.",
+    ]))
+    story.append(Paragraph("Tab Akun Admin", h2))
+    story.append(bullets([
+        "Tambah akun admin baru (nama, username, password, status aktif).",
+        "Aktifkan/nonaktifkan atau hapus akun. Akun <b>Owner</b> tidak dapat dihapus.",
+    ]))
+
+    # 4. FAQ
+    story.append(Paragraph("4. Tips &amp; Pertanyaan Umum", h1))
+    story.append(bullets([
+        "<b>Tanggal tidak bisa dipilih?</b> Berarti sudah dibooking. Pilih tanggal lain.",
+        "<b>QRIS tidak muncul?</b> Admin belum mengunggah QRIS di tab Pengaturan.",
+        "<b>Kwitansi tidak bisa diunduh?</b> Hanya tersedia untuk pesanan berstatus Lunas dan tidak dibatalkan.",
+        "<b>Lupa menyimpan?</b> Banner kuning akan mengingatkan bila ada perubahan belum disimpan.",
+    ]))
+    story.append(Spacer(1, 8 * mm))
+    story.append(Paragraph("Diterbitkan oleh sistem SAPA &bull; Pemerintah Provinsi Kalimantan Utara", small))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+@api_router.get("/guide")
+async def download_guide():
+    pdf = build_guide_pdf()
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="Buku-Panduan-SAPA.pdf"'},
+    )
+
 
 
 @api_router.delete("/bookings/{booking_id}")

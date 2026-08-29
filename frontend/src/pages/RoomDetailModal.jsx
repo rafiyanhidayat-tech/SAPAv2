@@ -26,7 +26,7 @@ function toISO(d) {
 
 export default function RoomDetailModal({ room, open, onClose }) {
   const { settings, addToCart } = useApp();
-  const addons = settings?.addons || [];
+  const addons = useMemo(() => settings?.addons || [], [settings]);
 
   const [checkin, setCheckin] = useState(null);
   const [checkout, setCheckout] = useState(null);
@@ -53,6 +53,8 @@ export default function RoomDetailModal({ room, open, onClose }) {
       }),
     [booked]
   );
+  const bookedModifier = useMemo(() => ({ booked: disabledRanges }), [disabledRanges]);
+  const bookedModifierClasses = useMemo(() => ({ booked: "rdp-booked" }), []);
 
   useEffect(() => {
     if (open) {
@@ -195,8 +197,8 @@ export default function RoomDetailModal({ room, open, onClose }) {
                       if (checkout && d && checkout <= d) setCheckout(null);
                     }}
                     disabled={[{ before: today }, ...disabledRanges]}
-                    modifiers={{ booked: disabledRanges }}
-                    modifiersClassNames={{ booked: "rdp-booked" }}
+                    modifiers={bookedModifier}
+                    modifiersClassNames={bookedModifierClasses}
                   />
                 </PopoverContent>
               </Popover>
@@ -221,8 +223,8 @@ export default function RoomDetailModal({ room, open, onClose }) {
                     onSelect={setCheckout}
                     defaultMonth={checkin || undefined}
                     disabled={[(d) => !checkin || d <= checkin, ...disabledRanges]}
-                    modifiers={{ booked: disabledRanges }}
-                    modifiersClassNames={{ booked: "rdp-booked" }}
+                    modifiers={bookedModifier}
+                    modifiersClassNames={bookedModifierClasses}
                   />
                 </PopoverContent>
               </Popover>
@@ -249,8 +251,8 @@ export default function RoomDetailModal({ room, open, onClose }) {
                 <CalendarIcon className="h-3.5 w-3.5 text-red-400" /> Tanggal yang sudah penuh:
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {booked.slice(0, 8).map((b, i) => (
-                  <span key={i} data-testid="booked-range" className="text-[11px] px-2 py-1 rounded-md bg-red-500/10 text-red-300 border border-red-500/20">
+                {booked.slice(0, 8).map((b) => (
+                  <span key={`${b.checkin}-${b.checkout}`} data-testid="booked-range" className="text-[11px] px-2 py-1 rounded-md bg-red-500/10 text-red-300 border border-red-500/20">
                     {formatDate(b.checkin)} – {formatDate(b.checkout)}
                   </span>
                 ))}

@@ -156,7 +156,7 @@ export default function CartSheet({ open, onOpenChange }) {
 
               <div className="rounded-xl bg-slate-800 border border-slate-700/60 p-4 space-y-2 text-sm">
                 {order.items.map((i, idx) => (
-                  <div key={idx} className="flex justify-between text-slate-300">
+                  <div key={i.cartId || `${i.room_id}-${idx}`} className="flex justify-between text-slate-300">
                     <span>{i.room_name}</span>
                     <span>{formatRupiah(i.total)}</span>
                   </div>
@@ -240,7 +240,7 @@ export default function CartSheet({ open, onOpenChange }) {
                       <span>{formatRupiah(item.room_total)}</span>
                     </div>
                     {item.addons.map((a, idx) => (
-                      <div key={idx} className="flex justify-between text-xs">
+                      <div key={`${a.name}-${idx}`} className="flex justify-between text-xs">
                         <span>+ {a.name} {a.qty > 1 ? `×${a.qty}` : ""}</span>
                         <span>{formatRupiah(a.total)}</span>
                       </div>

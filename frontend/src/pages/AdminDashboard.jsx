@@ -152,7 +152,9 @@ export default function AdminDashboard({ bookings, reload }) {
           const txt = await e.response.data.text();
           msg = JSON.parse(txt).detail || msg;
         }
-      } catch {}
+      } catch (parseErr) {
+        console.error("Gagal membaca pesan error kwitansi", parseErr);
+      }
       toast.error(msg);
     }
   };
