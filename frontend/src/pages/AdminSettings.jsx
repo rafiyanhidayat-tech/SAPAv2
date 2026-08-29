@@ -34,7 +34,7 @@ import {
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
 
-function ImageField({ label, value, onChange, testid, hint }) {
+function ImageField({ label, value, onChange, onUploaded, testid, hint }) {
   const inputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
 
@@ -47,11 +47,13 @@ function ImageField({ label, value, onChange, testid, hint }) {
       fd.append("file", file);
       const { data } = await api.post("/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
       onChange(data.url);
-      toast.success("Gambar diunggah");
+      if (onUploaded) await onUploaded(data.url);
+      toast.success("Foto tersimpan");
     } catch (err) {
       toast.error(apiErr(err, "Upload gagal"));
     } finally {
       setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
     }
   };
 
@@ -59,16 +61,15 @@ function ImageField({ label, value, onChange, testid, hint }) {
     <div>
       {label && <Label className="text-xs text-slate-400">{label}</Label>}
       <div className="mt-2 flex gap-3 items-start">
-        <div className="h-20 w-28 rounded-lg overflow-hidden bg-slate-900 border border-slate-700 shrink-0 grid place-items-center">
+        <div className="h-24 w-32 rounded-lg overflow-hidden bg-slate-900 border border-slate-700 shrink-0 grid place-items-center">
           {value ? <img src={fileUrl(value)} alt="preview" className="h-full w-full object-cover" /> : <ImageIcon className="h-6 w-6 text-slate-600" />}
         </div>
         <div className="flex-1 space-y-2">
           <input ref={inputRef} type="file" accept="image/*" hidden onChange={handleFile} />
-          <Button data-testid={`${testid}-upload`} type="button" onClick={() => inputRef.current?.click()} disabled={uploading} className="w-full bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 h-10">
-            <Upload className="h-4 w-4 mr-2" /> {uploading ? "Mengunggah..." : "Unggah Foto dari Perangkat"}
+          <Button data-testid={`${testid}-upload`} type="button" onClick={() => inputRef.current?.click()} disabled={uploading} className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold h-11">
+            <Upload className="h-4 w-4 mr-2" /> {uploading ? "Mengunggah..." : value ? "Ganti Foto" : "Unggah Foto"}
           </Button>
-          <Input data-testid={`${testid}-url`} value={value || ""} onChange={(e) => onChange(e.target.value)} placeholder="atau tempel URL gambar di sini" className="bg-slate-900 border-slate-700 text-slate-100 text-sm h-9" />
-          {hint && <p className="text-[11px] text-slate-500">{hint}</p>}
+          <p className="text-[11px] text-slate-500">{hint || "Pilih foto dari perangkat Anda — langsung tersimpan, tanpa perlu URL."}</p>
         </div>
       </div>
     </div>
@@ -311,7 +312,7 @@ export default function AdminSettings() {
           <Label className="text-xs text-slate-400">Subjudul</Label>
           <Textarea data-testid="settings-hero-subtitle" value={draft.hero_subtitle || ""} onChange={(e) => set("hero_subtitle", e.target.value)} className="mt-1 bg-slate-900 border-slate-700 text-slate-100" />
         </div>
-        <ImageField label="Gambar Hero" value={draft.hero_image} onChange={(v) => set("hero_image", v)} testid="settings-hero-image" />
+        <ImageField label="Gambar Hero" value={draft.hero_image} onChange={(v) => set("hero_image", v)} onUploaded={(url) => persist({ ...draft, hero_image: url }, "Gambar hero diperbarui")} testid="settings-hero-image" />
       </Section>
 
       <Section
@@ -417,8 +418,26 @@ export default function AdminSettings() {
         </div>
       </Section>
 
-      <Section title="Pembayaran & Kontak" subtitle="QRIS, nomor WhatsApp admin, dan info pembayaran.">
-        <ImageField label="Gambar QRIS" value={draft.qris_image} onChange={(v) => set("qris_image", v)} testid="settings-qris-image" />
+      <Section title="Pembayaran & Kontak" subtitle="QRIS, rekening kantor, nomor WhatsApp admin, dan info pembayaran.">
+        <ImageField label="Gambar QRIS" value={draft.qris_image} onChange={(v) => set("qris_image", v)} onUploaded={(url) => persist({ ...draft, qris_image: url }, "QRIS diperbarui")} testid="settings-qris-image" hint="Unggah gambar QRIS kantor — langsung tersimpan." />
+        <div className="rounded-xl bg-slate-900/50 border border-slate-700/60 p-4 space-y-3">
+          <Label className="text-xs uppercase tracking-wider text-amber-400">Rekening Kantor (Transfer Bank)</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <Label className="text-xs text-slate-400">Nama Bank</Label>
+              <Input data-testid="settings-bank-name" value={draft.bank_name || ""} onChange={(e) => set("bank_name", e.target.value)} className="mt-1 bg-slate-900 border-slate-700 text-slate-100" placeholder="cth: Bank Kaltimtara" />
+            </div>
+            <div>
+              <Label className="text-xs text-slate-400">No. Rekening</Label>
+              <Input data-testid="settings-bank-account" value={draft.bank_account || ""} onChange={(e) => set("bank_account", e.target.value)} className="mt-1 bg-slate-900 border-slate-700 text-slate-100" placeholder="cth: 000123456789" />
+            </div>
+            <div>
+              <Label className="text-xs text-slate-400">Atas Nama</Label>
+              <Input data-testid="settings-bank-holder" value={draft.bank_holder || ""} onChange={(e) => set("bank_holder", e.target.value)} className="mt-1 bg-slate-900 border-slate-700 text-slate-100" placeholder="cth: Panti Sosial Kaltara" />
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-500">Ditampilkan ke penyewa saat memilih metode Transfer Bank. Bisa diubah kapan saja.</p>
+        </div>
         <div>
           <Label className="text-xs text-slate-400">No. WhatsApp Admin</Label>
           <Input data-testid="settings-whatsapp" value={draft.whatsapp_admin || ""} onChange={(e) => set("whatsapp_admin", e.target.value)} className="mt-1 bg-slate-900 border-slate-700 text-slate-100" placeholder="6281234567890 (kode negara tanpa +)" />

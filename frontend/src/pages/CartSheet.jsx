@@ -187,7 +187,11 @@ export default function CartSheet({ open, onOpenChange }) {
                   onClick={() => proofRef.current?.click()}
                   disabled={uploading || proofUploaded}
                   variant="outline"
-                  className="w-full rounded-full border-slate-600 text-slate-200 hover:bg-slate-800 h-12 disabled:opacity-60"
+                  className={`w-full rounded-full h-12 disabled:opacity-60 ${
+                    order.payment !== "Bayar di Tempat" && !proofUploaded
+                      ? "border-amber-500/60 text-amber-300 hover:bg-amber-500/10"
+                      : "border-slate-600 text-slate-200 hover:bg-slate-800"
+                  }`}
                 >
                   {proofUploaded ? (
                     <><CheckCircle2 className="h-4 w-4 mr-2 text-emerald-400" /> Bukti Bayar Terkirim</>
@@ -195,10 +199,20 @@ export default function CartSheet({ open, onOpenChange }) {
                     <><Upload className="h-4 w-4 mr-2" /> {uploading ? "Mengunggah..." : "Upload Bukti Pembayaran"}</>
                   )}
                 </Button>
+                {order.payment !== "Bayar di Tempat" && !proofUploaded && (
+                  <p data-testid="proof-required-note" className="mt-2 text-xs text-amber-400/90 text-center">
+                    Wajib upload bukti pembayaran sebelum menyelesaikan pesanan.
+                  </p>
+                )}
               </div>
             </div>
             <div className="px-6 py-5 border-t border-slate-800">
-              <Button data-testid="order-done-btn" onClick={closeSuccess} className="w-full rounded-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold h-11">
+              <Button
+                data-testid="order-done-btn"
+                onClick={closeSuccess}
+                disabled={order.payment !== "Bayar di Tempat" && !proofUploaded}
+                className="w-full rounded-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold h-11 disabled:opacity-50"
+              >
                 Selesai
               </Button>
             </div>
@@ -296,6 +310,22 @@ export default function CartSheet({ open, onOpenChange }) {
                         </div>
                       )}
                       {settings?.payment_info && <p className="mt-3 text-xs text-slate-400 leading-relaxed">{settings.payment_info}</p>}
+                    </div>
+                  )}
+
+                  {payment === "Bank Transfer" && (
+                    <div data-testid="bank-info" className="rounded-xl bg-slate-800 border border-slate-700 p-4 space-y-1">
+                      {settings?.bank_account ? (
+                        <>
+                          <div className="text-xs text-slate-400">Silakan transfer ke rekening:</div>
+                          <div className="text-slate-100 font-medium">{settings.bank_name || "Bank"}</div>
+                          <div className="text-amber-400 font-mono text-lg tracking-wide">{settings.bank_account}</div>
+                          <div className="text-xs text-slate-400">a.n. {settings.bank_holder || "-"}</div>
+                          <p className="text-[11px] text-slate-500 pt-1">Wajib upload bukti transfer setelah checkout untuk diverifikasi admin.</p>
+                        </>
+                      ) : (
+                        <div className="text-xs text-slate-500 py-2">Rekening belum diatur admin. Silakan pilih metode lain atau hubungi admin.</div>
+                      )}
                     </div>
                   )}
                 </div>

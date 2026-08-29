@@ -149,6 +149,9 @@ DEFAULT_SETTINGS = {
     ],
     "qris_image": "",
     "whatsapp_admin": "",
+    "bank_name": "",
+    "bank_account": "",
+    "bank_holder": "",
     "payment_info": "Silakan lakukan pembayaran melalui QRIS di atas, lalu unggah bukti pembayaran. Booking Anda berstatus Pending hingga pembayaran diverifikasi admin.",
 }
 
